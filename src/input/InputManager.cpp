@@ -647,6 +647,21 @@ EmulatedControllerPtr InputManager::set_controller(size_t player_index, Emulated
 	return result;
 }
 
+#if defined(CEMU_UWP)
+bool InputManager::normalize_uwp_wpad_slots()
+{
+	std::scoped_lock lock(m_mutex);
+	const auto previous = m_wpad;
+	std::stable_sort(m_wpad.begin(), m_wpad.end(),
+		[](const EmulatedControllerPtr& lhs, const EmulatedControllerPtr& rhs) {
+			if (!lhs) return false;
+			if (!rhs) return true;
+			return lhs->player_index() < rhs->player_index();
+		});
+	return m_wpad != previous;
+}
+#endif
+
 EmulatedControllerPtr InputManager::get_controller(size_t player_index) const
 {
 	std::shared_lock lock(m_mutex);
@@ -693,9 +708,12 @@ EmulatedControllerPtr InputManager::delete_controller(size_t player_index, bool 
 		{
 			controller = {};
 
-			std::error_code ec{};
-			fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.xml", player_index), ec);
-			fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.txt", player_index), ec);
+			if (delete_profile)
+			{
+				std::error_code ec{};
+				fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.xml", player_index), ec);
+				fs::remove(ActiveSettings::GetConfigPath("controllerProfiles/controller{}.txt", player_index), ec);
+			}
 
 			return result;
 		}
@@ -720,7 +738,15 @@ std::shared_ptr<WPADController> InputManager::get_wpad_controller(size_t index) 
 		return {};
 
 	std::shared_lock lock(m_mutex);
-	return std::dynamic_pointer_cast<WPADController>(m_wpad[index]);
+	auto controller = std::dynamic_pointer_cast<WPADController>(m_wpad[index]);
+#if defined(CEMU_UWP)
+	// UWP pre-creates multiplayer WPAD slots so hot-plug never mutates Cemu's
+	// input topology while a title is running. Hide a slot from Cafe until its
+	// host-fed physical controller is actually connected.
+	if (controller && !controller->has_connected_controller())
+		return {};
+#endif
+	return controller;
 }
 
 std::pair<size_t, size_t> InputManager::get_controller_count() const

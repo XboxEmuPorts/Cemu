@@ -109,7 +109,21 @@ ControllerPtr ControllerFactory::CreateController(InputAPI::Type api, std::strin
 		}
 #endif
 	case InputAPI::WGIGamepad:
-		return std::make_shared<UWPGamepadController>();
+		{
+			uint32 playerIndex = 0;
+			constexpr std::string_view prefix = "host-wgi-gamepad-";
+			if (uuid.substr(0, prefix.size()) == prefix)
+			{
+				try
+				{
+					playerIndex = ConvertString<uint32>(uuid.substr(prefix.size()));
+				}
+				catch (...) { playerIndex = 0; }
+			}
+			if (playerIndex >= UWPGamepadController::kMaxHostGamepads)
+				playerIndex = 0;
+			return std::make_shared<UWPGamepadController>(playerIndex);
+		}
 	default:
 		throw std::invalid_argument(fmt::format("unhandled controller api: {}", api));
 	}

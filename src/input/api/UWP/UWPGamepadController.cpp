@@ -1,7 +1,9 @@
 #include "input/api/UWP/UWPGamepadController.h"
 
 #include <algorithm>
+#include <array>
 #include <mutex>
+#include <string>
 
 namespace
 {
@@ -18,7 +20,8 @@ struct HostGamepadState
 };
 
 std::mutex s_hostGamepadMutex;
-HostGamepadState s_hostGamepadState;
+std::array<HostGamepadState, UWPGamepadController::kMaxHostGamepads> s_hostGamepadStates{};
+std::array<float, UWPGamepadController::kMaxHostGamepads> s_hostGamepadRumble{};
 
 float ClampAxis(float value)
 {
@@ -26,17 +29,25 @@ float ClampAxis(float value)
 }
 }
 
-UWPGamepadController::UWPGamepadController()
-	: ControllerBase("host-wgi-gamepad", "Xbox Gamepad")
+UWPGamepadController::UWPGamepadController(uint32 playerIndex)
+	: ControllerBase(playerIndex == 0 ? "host-wgi-gamepad" :
+		std::string("host-wgi-gamepad-") + std::to_string(playerIndex),
+		"Xbox Gamepad"),
+	m_playerIndex(playerIndex)
 {
+	set_rumble(1.0f);
 }
 
-void UWPGamepadController::SetHostState(bool connected, uint32 buttons,
+void UWPGamepadController::SetHostState(uint32 playerIndex, bool connected, uint32 buttons,
 	float leftX, float leftY, float rightX, float rightY,
 	float leftTrigger, float rightTrigger)
 {
+	if (playerIndex >= kMaxHostGamepads)
+		return;
 	std::scoped_lock lock(s_hostGamepadMutex);
-	s_hostGamepadState = {
+	if (!connected || !s_hostGamepadStates[playerIndex].connected)
+		s_hostGamepadRumble[playerIndex] = 0.0f;
+	s_hostGamepadStates[playerIndex] = {
 		connected,
 		buttons,
 		ClampAxis(leftX), ClampAxis(leftY),
@@ -46,15 +57,44 @@ void UWPGamepadController::SetHostState(bool connected, uint32 buttons,
 	};
 }
 
-bool UWPGamepadController::IsHostGamepadConnected()
+bool UWPGamepadController::IsHostGamepadConnected(uint32 playerIndex)
 {
+	if (playerIndex >= kMaxHostGamepads)
+		return false;
 	std::scoped_lock lock(s_hostGamepadMutex);
-	return s_hostGamepadState.connected;
+	return s_hostGamepadStates[playerIndex].connected;
+}
+
+float UWPGamepadController::GetHostRumble(uint32 playerIndex)
+{
+	if (playerIndex >= kMaxHostGamepads)
+		return 0.0f;
+	std::scoped_lock lock(s_hostGamepadMutex);
+	return s_hostGamepadStates[playerIndex].connected ? s_hostGamepadRumble[playerIndex] : 0.0f;
 }
 
 bool UWPGamepadController::is_connected()
 {
-	return IsHostGamepadConnected();
+	return IsHostGamepadConnected(m_playerIndex);
+}
+
+void UWPGamepadController::start_rumble()
+{
+	if (m_playerIndex >= kMaxHostGamepads)
+		return;
+	const auto settings = get_settings();
+	const float intensity = (std::max)(0.0f, (std::min)(settings.rumble, 1.0f));
+	std::scoped_lock lock(s_hostGamepadMutex);
+	if (s_hostGamepadStates[m_playerIndex].connected)
+		s_hostGamepadRumble[m_playerIndex] = intensity;
+}
+
+void UWPGamepadController::stop_rumble()
+{
+	if (m_playerIndex >= kMaxHostGamepads)
+		return;
+	std::scoped_lock lock(s_hostGamepadMutex);
+	s_hostGamepadRumble[m_playerIndex] = 0.0f;
 }
 
 std::string UWPGamepadController::get_button_name(uint64 button) const
@@ -67,7 +107,9 @@ ControllerState UWPGamepadController::raw_state()
 	HostGamepadState state;
 	{
 		std::scoped_lock lock(s_hostGamepadMutex);
-		state = s_hostGamepadState;
+		if (m_playerIndex >= kMaxHostGamepads)
+			return {};
+		state = s_hostGamepadStates[m_playerIndex];
 	}
 
 	ControllerState result{};

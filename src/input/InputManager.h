@@ -56,6 +56,10 @@ public:
 	EmulatedControllerPtr set_controller(size_t player_index, EmulatedController::Type type);
 	EmulatedControllerPtr set_controller(size_t player_index, EmulatedController::Type type, const std::shared_ptr<ControllerBase>& controller);
 
+#if defined(CEMU_UWP)
+	// Only call before starting a title; compact WPAD slots by player index.
+	bool normalize_uwp_wpad_slots();
+#endif
 	EmulatedControllerPtr delete_controller(size_t player_index, bool delete_profile = false);
 	
 	EmulatedControllerPtr get_controller(size_t player_index) const;

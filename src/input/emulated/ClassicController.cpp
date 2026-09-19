@@ -210,6 +210,24 @@ bool ClassicController::set_default_mapping(const std::shared_ptr<ControllerBase
 		}
 	}
 #endif
+	case InputAPI::WGIGamepad:
+		// The UWP host exposes SDL-style button slots and upward-positive
+		// stick axes, just like the VPAD WGI default mapping.
+		mapping =
+		{
+			{kButtonId_A, kButton1}, {kButtonId_B, kButton0},
+			{kButtonId_X, kButton3}, {kButtonId_Y, kButton2},
+			{kButtonId_L, kButton9}, {kButtonId_R, kButton10},
+			{kButtonId_ZL, kTriggerXP}, {kButtonId_ZR, kTriggerYP},
+			{kButtonId_Plus, kButton6}, {kButtonId_Minus, kButton4},
+			{kButtonId_Up, kButton11}, {kButtonId_Down, kButton12},
+			{kButtonId_Left, kButton13}, {kButtonId_Right, kButton14},
+			{kButtonId_StickL_Up, kAxisYP}, {kButtonId_StickL_Down, kAxisYN},
+			{kButtonId_StickL_Left, kAxisXN}, {kButtonId_StickL_Right, kAxisXP},
+			{kButtonId_StickR_Up, kRotationYP}, {kButtonId_StickR_Down, kRotationYN},
+			{kButtonId_StickR_Left, kRotationXN}, {kButtonId_StickR_Right, kRotationXP},
+		};
+		break;
 	case InputAPI::XInput:
 	{
 		mapping =

@@ -56,6 +56,13 @@ void EmulatedController::connect()
 	}
 }
 
+bool EmulatedController::has_connected_controller() const
+{
+	std::shared_lock lock(m_mutex);
+	return std::any_of(m_controllers.cbegin(), m_controllers.cend(),
+		[](const auto& controller) { return controller && controller->is_connected(); });
+}
+
 void EmulatedController::update()
 {
 	std::shared_lock lock(m_mutex);
