@@ -67,6 +67,7 @@ namespace padscore
 			bool dpd_enabled = true;
 
 			bool disconnectCalled = false;
+			bool connected = false;
 
 			BtnRepeat btn_repeat{};
 		} controller_data[InputManager::kMaxWPADControllers] = {};
@@ -419,8 +420,17 @@ void padscoreExport_KPADSetConnectCallback(PPCInterpreter_t* hCPU)
 		return;
 	}
 
-	const auto old_callback = padscore::g_padscore.controller_data[channel].connectCallback;
-	padscore::g_padscore.controller_data[channel].connectCallback = callback;
+	auto& controllerData = padscore::g_padscore.controller_data[channel];
+	const auto old_callback = controllerData.connectCallback;
+	controllerData.connectCallback = callback;
+#if defined(CEMU_UWP)
+	if (callback != MPTR_NULL)
+	{
+		// Force the next padscore tick to report the current physical state to a
+		// newly registered callback, even when the topology was pre-created.
+		controllerData.connected = InputManager::instance().get_wpad_controller(channel) == nullptr;
+	}
+#endif
 	osLib_returnFromFunction(hCPU, old_callback.GetMPTR());
 }
 
@@ -697,6 +707,18 @@ namespace padscore
 		{
 			if (g_padscore.controller_data[i].connectCallback) 
 			{
+#if defined(CEMU_UWP)
+				auto& controllerData = g_padscore.controller_data[i];
+				const bool connected = instance.get_wpad_controller(i) != nullptr;
+				if (controllerData.connected != connected)
+				{
+					controllerData.connected = connected;
+					cemuLog_log(LogType::InputAPI, "Calling WPADConnectCallback({}, {})", i,
+						connected ? WPAD_ERR_NONE : WPAD_ERR_NO_CONTROLLER);
+					PPCCoreCallback(controllerData.connectCallback, i,
+						connected ? WPAD_ERR_NONE : WPAD_ERR_NO_CONTROLLER);
+				}
+#else
 				if(!g_padscore.controller_data[i].disconnectCalled)
 				{
 					g_padscore.controller_data[i].disconnectCalled = true;
@@ -722,6 +744,7 @@ namespace padscore
 						PPCCoreCallback(g_padscore.controller_data[i].connectCallback, i, WPAD_ERR_NONE);
 					}
 				}
+#endif
 			}
 		}
 

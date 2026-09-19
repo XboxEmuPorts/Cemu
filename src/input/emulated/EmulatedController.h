@@ -45,6 +45,7 @@ public:
 	void calibrate();
 
 	void connect();
+	bool has_connected_controller() const;
 	virtual void update();
 	void controllers_update_states();
 

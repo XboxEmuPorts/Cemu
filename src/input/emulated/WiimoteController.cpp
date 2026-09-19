@@ -56,6 +56,25 @@ bool WiimoteController::set_default_mapping(const std::shared_ptr<ControllerBase
 			{kButtonId_Nunchuck_Left, kAxisXN},
 			{kButtonId_Nunchuck_Right, kAxisXP},
 		};
+		break;
+	}
+	case InputAPI::WGIGamepad:
+	{
+		// Player one may select a Wiimote instead of a VPAD. Give the
+		// host-fed Xbox gamepad a usable Wiimote/Nunchuck default profile.
+		mapping =
+		{
+			{kButtonId_A, kButton0}, {kButtonId_B, kButton1},
+			{kButtonId_1, kButton2}, {kButtonId_2, kButton3},
+			{kButtonId_Home, kButton8},
+			{kButtonId_Plus, kButton6}, {kButtonId_Minus, kButton4},
+			{kButtonId_Up, kButton11}, {kButtonId_Down, kButton12},
+			{kButtonId_Left, kButton13}, {kButtonId_Right, kButton14},
+			{kButtonId_Nunchuck_Z, kTriggerXP}, {kButtonId_Nunchuck_C, kButton9},
+			{kButtonId_Nunchuck_Up, kAxisYP}, {kButtonId_Nunchuck_Down, kAxisYN},
+			{kButtonId_Nunchuck_Left, kAxisXN}, {kButtonId_Nunchuck_Right, kAxisXP},
+		};
+		break;
 	}
 	}
 

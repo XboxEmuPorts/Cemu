@@ -720,7 +720,15 @@ std::shared_ptr<WPADController> InputManager::get_wpad_controller(size_t index) 
 		return {};
 
 	std::shared_lock lock(m_mutex);
-	return std::dynamic_pointer_cast<WPADController>(m_wpad[index]);
+	auto controller = std::dynamic_pointer_cast<WPADController>(m_wpad[index]);
+#if defined(CEMU_UWP)
+	// UWP pre-creates multiplayer WPAD slots so hot-plug never mutates Cemu's
+	// input topology while a title is running. Hide a slot from Cafe until its
+	// host-fed physical controller is actually connected.
+	if (controller && !controller->has_connected_controller())
+		return {};
+#endif
+	return controller;
 }
 
 std::pair<size_t, size_t> InputManager::get_controller_count() const

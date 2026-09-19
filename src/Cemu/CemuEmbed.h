@@ -26,6 +26,7 @@ extern "C" {
 #define CEMU_EMBED_LIBRARY_VERSION 2u
 #define CEMU_EMBED_ACCOUNT_VERSION 1u
 #define CEMU_EMBED_GAMEPAD_VERSION 1u
+#define CEMU_EMBED_MAX_GAMEPADS 4u
 #define CEMU_EMBED_DIMENSIONS_VERSION 1u
 #define CEMU_EMBED_SETTINGS_VERSION 3u
 #define CEMU_EMBED_GRAPHIC_PACK_VERSION 1u
@@ -396,15 +397,23 @@ CEMU_EMBED_API CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetGraphicPackEnabled(
 CEMU_EMBED_API CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_ApplySafeGraphicPackPolicyForTitle(
 	CemuEmbedInstance* instance, uint64_t base_title_id,
 	uint32_t* affected_pack_count);
-// Ensures player one's selected emulated Wii U controller profile has a physical
-// input source. On UWP/Xbox, the host's Windows.Gaming.Input snapshot takes
-// precedence and replaces a stale SDL source copied from a desktop session.
+// Ensures the host controller topology is ready before a title starts. On
+// UWP/Xbox this creates stable player slots 0..3: player one keeps its selected
+// emulated controller type and players two through four use Pro Controllers.
+// Host-fed Windows.Gaming.Input snapshots replace stale SDL sources copied from
+// a desktop session without exposing WinRT objects to Cemu's worker threads.
 CEMU_EMBED_API CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_EnsureDefaultGamepadProfile(
 	CemuEmbedInstance* instance, int32_t* profile_ready);
-// Publishes the latest host-owned gamepad state. This has no WinRT objects in
-// its ABI and is safe to call from the XAML/Windows.Gaming.Input thread.
+// Publishes player one's latest host-owned gamepad state. Kept for ABI
+// compatibility; indexed UWP hosts should use SetHostGamepadStateForPlayer.
 CEMU_EMBED_API CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetHostGamepadState(
 	CemuEmbedInstance* instance, const CemuEmbedGamepadState* state);
+// Publishes one host-owned gamepad state. player_index is in the range
+// 0..CEMU_EMBED_MAX_GAMEPADS-1. The ABI contains no WinRT objects and is safe
+// to call from the XAML/Windows.Gaming.Input thread while a title is running.
+CEMU_EMBED_API CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetHostGamepadStateForPlayer(
+	CemuEmbedInstance* instance, uint32_t player_index,
+	const CemuEmbedGamepadState* state);
 // Publishes a host-owned virtual mouse in physical surface pixels. While it is
 // enabled, the UWP SDL path reserves A, L/R and the left stick for the mouse.
 CEMU_EMBED_API CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetVirtualMouse(

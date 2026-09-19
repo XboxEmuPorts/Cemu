@@ -2302,55 +2302,67 @@ extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_EnsureDefaultGamepadProfile
 		return CEMU_EMBED_INVALID_STATE;
 #if defined(CEMU_UWP)
 	// On Xbox, WGI objects are apartment-affine. Do not ask SDL to open a WGI
-	// controller from Cemu's worker thread; the host publishes a plain state
-	// snapshot instead. This also replaces stale desktop SDL profiles.
-	if (UWPGamepadController::IsHostGamepadConnected()) {
-		try {
+	// controller from Cemu's worker thread; the host publishes plain state
+	// snapshots instead. Build all four player slots before a title starts so
+	// later hot-plug events only update POD state and never mutate input topology.
+	if (!UWPGamepadController::IsHostGamepadConnected(0))
+		return CEMU_EMBED_OK;
+	try {
 		auto& input = InputManager::instance();
-		auto emulated = input.get_controller(0);
-		std::shared_ptr<ControllerBase> controller;
-		if (emulated) {
-			for (const auto& configured : emulated->get_controllers()) {
-				if (configured && configured->api() == InputAPI::WGIGamepad) {
-					controller = configured;
-					break;
+		bool topologyChanged = false;
+		for (uint32 playerIndex = 0; playerIndex < CEMU_EMBED_MAX_GAMEPADS; ++playerIndex) {
+			auto emulated = input.get_controller(playerIndex);
+			const auto selectedType = playerIndex == 0
+				? (emulated ? emulated->type() : EmulatedController::Type::VPAD)
+				: EmulatedController::Type::Pro;
+			std::shared_ptr<UWPGamepadController> controller;
+			if (emulated && emulated->type() == selectedType) {
+				for (const auto& configured : emulated->get_controllers()) {
+					if (!configured || configured->api() != InputAPI::WGIGamepad)
+						continue;
+					auto hostController = std::dynamic_pointer_cast<UWPGamepadController>(configured);
+					if (hostController && hostController->host_player_index() == playerIndex) {
+						controller = std::move(hostController);
+						break;
+					}
 				}
 			}
-		}
-		if (!controller) {
-			// Build a complete replacement before publishing it to InputManager.
-			// Mutating an active EmulatedController in place can race the 1 ms
-			// input update thread on Xbox and caused crashes when a game first
-			// consumed controller input.
-			const auto selectedType = emulated ? emulated->type() : EmulatedController::Type::VPAD;
-			auto replacement = ControllerFactory::CreateEmulatedController(0, selectedType);
+			if (controller)
+				continue;
+
+			// Publish a complete replacement atomically through InputManager. Never
+			// mutate an active EmulatedController in place because its 1 ms update
+			// thread may already be reading it.
+			auto replacement = ControllerFactory::CreateEmulatedController(playerIndex, selectedType);
 			if (!replacement)
 				return CEMU_EMBED_INITIALIZATION_FAILED;
-			controller = std::make_shared<UWPGamepadController>();
+			controller = std::make_shared<UWPGamepadController>(playerIndex);
 			replacement->add_controller(controller);
 			if (!replacement->set_default_mapping(controller))
 				return CEMU_EMBED_INITIALIZATION_FAILED;
 			input.set_controller(replacement);
-			if (!input.save(0))
-				cemuLog_log(LogType::Force, "Could not save the host Xbox controller profile");
+			if (!input.save(playerIndex))
+				cemuLog_log(LogType::Force,
+					"Could not save host Xbox controller profile for player {}", playerIndex + 1);
+			topologyChanged = true;
+		}
+		if (topologyChanged)
 			input.on_device_changed();
-			cemuLog_log(LogType::Force,
-				"Configured the host Xbox controller as {} safely without SDL/WGI cross-thread access",
-				replacement->type_string());
-		}
-		*profileReady = controller->is_connected() ? 1 : 0;
+		*profileReady = UWPGamepadController::IsHostGamepadConnected(0) ? 1 : 0;
+		cemuLog_log(LogType::Force,
+			"Prepared {} host Xbox controller slots without SDL/WGI cross-thread access",
+			CEMU_EMBED_MAX_GAMEPADS);
 		return CEMU_EMBED_OK;
-		}
-		catch (const std::exception& exception) {
-			cemuLog_log(LogType::Force,
-				"Could not configure the host Xbox controller profile: {}", exception.what());
-			return CEMU_EMBED_INITIALIZATION_FAILED;
-		}
-		catch (...) {
-			cemuLog_log(LogType::Force,
-				"Could not configure the host Xbox controller profile due to an unknown error");
-			return CEMU_EMBED_INITIALIZATION_FAILED;
-		}
+	}
+	catch (const std::exception& exception) {
+		cemuLog_log(LogType::Force,
+			"Could not configure the host Xbox controller profiles: {}", exception.what());
+		return CEMU_EMBED_INITIALIZATION_FAILED;
+	}
+	catch (...) {
+		cemuLog_log(LogType::Force,
+			"Could not configure the host Xbox controller profiles due to an unknown error");
+		return CEMU_EMBED_INITIALIZATION_FAILED;
 	}
 #endif
 #ifdef HAS_SDL
@@ -2414,15 +2426,20 @@ extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_EnsureDefaultGamepadProfile
 #endif
 	return CEMU_EMBED_OK;
 }
-extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetHostGamepadState(
-	CemuEmbedInstance* instance, const CemuEmbedGamepadState* state) {
-	if (!instance || !state || state->struct_size < sizeof(CemuEmbedGamepadState) ||
+extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetHostGamepadStateForPlayer(
+	CemuEmbedInstance* instance, uint32_t playerIndex, const CemuEmbedGamepadState* state) {
+	if (!instance || playerIndex >= CEMU_EMBED_MAX_GAMEPADS || !state ||
+		state->struct_size < sizeof(CemuEmbedGamepadState) ||
 		state->abi_version != CEMU_EMBED_GAMEPAD_VERSION)
 		return CEMU_EMBED_INVALID_ARGUMENT;
-	UWPGamepadController::SetHostState(state->connected != 0, state->buttons,
+	UWPGamepadController::SetHostState(playerIndex, state->connected != 0, state->buttons,
 		state->left_x, state->left_y, state->right_x, state->right_y,
 		state->left_trigger, state->right_trigger);
 	return CEMU_EMBED_OK;
+}
+extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetHostGamepadState(
+	CemuEmbedInstance* instance, const CemuEmbedGamepadState* state) {
+	return CemuEmbed_SetHostGamepadStateForPlayer(instance, 0, state);
 }
 extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetVirtualMouse(
 	CemuEmbedInstance* instance, int32_t x, int32_t y,
