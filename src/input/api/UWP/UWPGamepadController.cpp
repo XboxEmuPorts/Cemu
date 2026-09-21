@@ -21,6 +21,7 @@ struct HostGamepadState
 
 std::mutex s_hostGamepadMutex;
 std::array<HostGamepadState, UWPGamepadController::kMaxHostGamepads> s_hostGamepadStates{};
+std::array<float, UWPGamepadController::kMaxHostGamepads> s_hostGamepadRumble{};
 
 float ClampAxis(float value)
 {
@@ -34,6 +35,7 @@ UWPGamepadController::UWPGamepadController(uint32 playerIndex)
 		"Xbox Gamepad"),
 	m_playerIndex(playerIndex)
 {
+	set_rumble(1.0f);
 }
 
 void UWPGamepadController::SetHostState(uint32 playerIndex, bool connected, uint32 buttons,
@@ -61,9 +63,35 @@ bool UWPGamepadController::IsHostGamepadConnected(uint32 playerIndex)
 	return s_hostGamepadStates[playerIndex].connected;
 }
 
+float UWPGamepadController::GetHostRumble(uint32 playerIndex)
+{
+	if (playerIndex >= kMaxHostGamepads)
+		return 0.0f;
+	std::scoped_lock lock(s_hostGamepadMutex);
+	return s_hostGamepadRumble[playerIndex];
+}
+
 bool UWPGamepadController::is_connected()
 {
 	return IsHostGamepadConnected(m_playerIndex);
+}
+
+void UWPGamepadController::start_rumble()
+{
+	if (m_playerIndex >= kMaxHostGamepads)
+		return;
+	const auto settings = get_settings();
+	const float intensity = (std::max)(0.0f, (std::min)(settings.rumble, 1.0f));
+	std::scoped_lock lock(s_hostGamepadMutex);
+	s_hostGamepadRumble[m_playerIndex] = intensity;
+}
+
+void UWPGamepadController::stop_rumble()
+{
+	if (m_playerIndex >= kMaxHostGamepads)
+		return;
+	std::scoped_lock lock(s_hostGamepadMutex);
+	s_hostGamepadRumble[m_playerIndex] = 0.0f;
 }
 
 std::string UWPGamepadController::get_button_name(uint64 button) const

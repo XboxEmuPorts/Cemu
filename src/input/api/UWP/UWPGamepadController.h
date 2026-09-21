@@ -15,11 +15,15 @@ public:
 		float leftX, float leftY, float rightX, float rightY,
 		float leftTrigger, float rightTrigger);
 	static bool IsHostGamepadConnected(uint32 playerIndex = 0);
+	static float GetHostRumble(uint32 playerIndex);
 	uint32 host_player_index() const { return m_playerIndex; }
 
 	std::string_view api_name() const override { return "Windows.Gaming.Input"; }
 	InputAPI::Type api() const override { return InputAPI::WGIGamepad; }
 	bool is_connected() override;
+	bool has_rumble() override { return true; }
+	void start_rumble() override;
+	void stop_rumble() override;
 	std::string get_button_name(uint64 button) const override;
 
 protected:

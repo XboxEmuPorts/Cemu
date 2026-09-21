@@ -2341,9 +2341,11 @@ extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_EnsureDefaultGamepadProfile
 			if (!replacement->set_default_mapping(controller))
 				return CEMU_EMBED_INITIALIZATION_FAILED;
 			input.set_controller(replacement);
-			if (!input.save(playerIndex))
+			// P2-P4 are host-managed runtime topology. Persist only the existing P1
+			// profile so multiplayer support does not create extra configuration.
+			if (playerIndex == 0 && !input.save(0))
 				cemuLog_log(LogType::Force,
-					"Could not save host Xbox controller profile for player {}", playerIndex + 1);
+					"Could not save host Xbox controller profile for player 1");
 			topologyChanged = true;
 		}
 		if (topologyChanged)
@@ -2440,6 +2442,13 @@ extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetHostGamepadStateForPlaye
 extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetHostGamepadState(
 	CemuEmbedInstance* instance, const CemuEmbedGamepadState* state) {
 	return CemuEmbed_SetHostGamepadStateForPlayer(instance, 0, state);
+}
+extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_GetHostGamepadRumble(
+	CemuEmbedInstance* instance, uint32_t playerIndex, float* intensity) {
+	if (!instance || playerIndex >= CEMU_EMBED_MAX_GAMEPADS || !intensity)
+		return CEMU_EMBED_INVALID_ARGUMENT;
+	*intensity = UWPGamepadController::GetHostRumble(playerIndex);
+	return CEMU_EMBED_OK;
 }
 extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetVirtualMouse(
 	CemuEmbedInstance* instance, int32_t x, int32_t y,

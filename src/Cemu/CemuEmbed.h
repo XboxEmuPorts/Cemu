@@ -414,6 +414,11 @@ CEMU_EMBED_API CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetHostGamepadState(
 CEMU_EMBED_API CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetHostGamepadStateForPlayer(
 	CemuEmbedInstance* instance, uint32_t player_index,
 	const CemuEmbedGamepadState* state);
+// Reads the latest rumble intensity requested by one host-fed controller.
+// The UWP host applies this value to the apartment-owned Gamepad object.
+CEMU_EMBED_API CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_GetHostGamepadRumble(
+	CemuEmbedInstance* instance, uint32_t player_index,
+	float* intensity);
 // Publishes a host-owned virtual mouse in physical surface pixels. While it is
 // enabled, the UWP SDL path reserves A, L/R and the left stick for the mouse.
 CEMU_EMBED_API CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetVirtualMouse(
