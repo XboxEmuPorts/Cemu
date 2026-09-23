@@ -45,6 +45,8 @@ void UWPGamepadController::SetHostState(uint32 playerIndex, bool connected, uint
 	if (playerIndex >= kMaxHostGamepads)
 		return;
 	std::scoped_lock lock(s_hostGamepadMutex);
+	if (!connected || !s_hostGamepadStates[playerIndex].connected)
+		s_hostGamepadRumble[playerIndex] = 0.0f;
 	s_hostGamepadStates[playerIndex] = {
 		connected,
 		buttons,
@@ -68,7 +70,7 @@ float UWPGamepadController::GetHostRumble(uint32 playerIndex)
 	if (playerIndex >= kMaxHostGamepads)
 		return 0.0f;
 	std::scoped_lock lock(s_hostGamepadMutex);
-	return s_hostGamepadRumble[playerIndex];
+	return s_hostGamepadStates[playerIndex].connected ? s_hostGamepadRumble[playerIndex] : 0.0f;
 }
 
 bool UWPGamepadController::is_connected()
@@ -83,7 +85,8 @@ void UWPGamepadController::start_rumble()
 	const auto settings = get_settings();
 	const float intensity = (std::max)(0.0f, (std::min)(settings.rumble, 1.0f));
 	std::scoped_lock lock(s_hostGamepadMutex);
-	s_hostGamepadRumble[m_playerIndex] = intensity;
+	if (s_hostGamepadStates[m_playerIndex].connected)
+		s_hostGamepadRumble[m_playerIndex] = intensity;
 }
 
 void UWPGamepadController::stop_rumble()

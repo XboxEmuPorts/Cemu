@@ -2305,8 +2305,6 @@ extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_EnsureDefaultGamepadProfile
 	// controller from Cemu's worker thread; the host publishes plain state
 	// snapshots instead. Build all four player slots before a title starts so
 	// later hot-plug events only update POD state and never mutate input topology.
-	if (!UWPGamepadController::IsHostGamepadConnected(0))
-		return CEMU_EMBED_OK;
 	try {
 		auto& input = InputManager::instance();
 		bool topologyChanged = false;
@@ -2348,9 +2346,12 @@ extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_EnsureDefaultGamepadProfile
 					"Could not save host Xbox controller profile for player 1");
 			topologyChanged = true;
 		}
+		// WPAD order is determined by player index, not by creation time.
+		// Run this even when every configured controller was reused.
+		topologyChanged |= input.normalize_uwp_wpad_slots();
 		if (topologyChanged)
 			input.on_device_changed();
-		*profileReady = UWPGamepadController::IsHostGamepadConnected(0) ? 1 : 0;
+		*profileReady = 1; // The virtual topology is ready even with no physical pads.
 		cemuLog_log(LogType::Force,
 			"Prepared {} host Xbox controller slots without SDL/WGI cross-thread access",
 			CEMU_EMBED_MAX_GAMEPADS);
@@ -2567,11 +2568,18 @@ extern "C" CemuEmbedResult CEMU_EMBED_CALL CemuEmbed_SetSettings(
 					return CEMU_EMBED_INITIALIZATION_FAILED;
 			}
 			auto previous = input.set_controller(replacement);
+#if defined(CEMU_UWP)
+			// Changing P1 between VPAD and WPAD must not move P1 behind P2-P4.
+			input.normalize_uwp_wpad_slots();
+#endif
 			if (!input.save(0)) {
 				if (previous)
 					input.set_controller(previous);
 				else
 					input.delete_controller(0);
+#if defined(CEMU_UWP)
+				input.normalize_uwp_wpad_slots();
+#endif
 				return CEMU_EMBED_STORAGE_FAILED;
 			}
 			input.on_device_changed();

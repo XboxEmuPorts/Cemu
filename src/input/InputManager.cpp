@@ -647,6 +647,21 @@ EmulatedControllerPtr InputManager::set_controller(size_t player_index, Emulated
 	return result;
 }
 
+#if defined(CEMU_UWP)
+bool InputManager::normalize_uwp_wpad_slots()
+{
+	std::scoped_lock lock(m_mutex);
+	const auto previous = m_wpad;
+	std::stable_sort(m_wpad.begin(), m_wpad.end(),
+		[](const EmulatedControllerPtr& lhs, const EmulatedControllerPtr& rhs) {
+			if (!lhs) return false;
+			if (!rhs) return true;
+			return lhs->player_index() < rhs->player_index();
+		});
+	return m_wpad != previous;
+}
+#endif
+
 EmulatedControllerPtr InputManager::get_controller(size_t player_index) const
 {
 	std::shared_lock lock(m_mutex);
